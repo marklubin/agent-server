@@ -1,0 +1,24 @@
+services:
+  letta:
+    container_name: letta
+    image: letta/letta:latest
+    ports:
+      - "9000:8283"
+    volumes:
+      - .letta/.persist/pgdata:/var/lib/postgresql/data
+    env_file:
+      - .env
+  piper:
+    build:
+      context: https://github.com/OHF-Voice/piper1-gpl.git
+    container_name: piper
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        python3 -m piper.download_voices --download-dir /data en_US-ljspeech-high &&
+        python3 -m piper.http_server --host 0.0.0.0 --data-dir /data -m /data/en_US-ljspeech-high.onnx
+    volumes:
+      - .piper:/data  # Voice model cache
+    ports:
+      - "5001:5000"
+    restart: unless-stopped

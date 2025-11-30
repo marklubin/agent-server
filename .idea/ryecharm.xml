@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="insyncwithfoo.ryecharm.configurations.ty.Local">
+    <option name="executable" value="$PROJECT_DIR$/.venv/bin/ty" />
+    <option name="runningMode" value="LSP" />
+  </component>
+  <component name="insyncwithfoo.ryecharm.configurations.uv.Local">
+    <option name="executable" value="$USER_HOME$/.local/bin/uv" />
+  </component>
+</project>
