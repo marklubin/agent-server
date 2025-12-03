@@ -22,6 +22,7 @@ dependencies = [
 agent-server = "agent_server.main:main"
 test-client = "agent_server.test_client:run"
 voice-client = "agent_server.voice_client:main"
+provision-agent = "agent_server.provisioning.cli:cli"
 
 [build-system]
 requires = ["uv_build>=0.9,<0.10"]
@@ -131,6 +132,12 @@ max-args = 6
 ]
 "**/test_client.py" = [
     "T20",     # Allow print in CLI client
+]
+"**/provisioning/blocks.py" = [
+    "E501",    # Long lines in prose content (persona, writ)
+]
+"**/provisioning/agents.py" = [
+    "E501",    # Long lines in system prompts
 ]
 
 [tool.ruff.format]

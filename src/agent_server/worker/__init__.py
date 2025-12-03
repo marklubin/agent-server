@@ -2,18 +2,21 @@
 
 from saq import CronJob, Queue
 
-from agent_server.worker.jobs import heartbeat_job
+from agent_server.config import Config
+from agent_server.worker.jobs import (
+    check_session_boundaries,
+    heartbeat_job,
+    summarize_session,
+)
 
-# Redis URL - localhost for local dev
-REDIS_URL = "redis://localhost:6379"
-
-queue = Queue.from_url(REDIS_URL)
+queue = Queue.from_url(Config.REDIS_URL.value)
 
 settings = {
     "queue": queue,
-    "functions": [heartbeat_job],
+    "functions": [heartbeat_job, check_session_boundaries, summarize_session],
     "concurrency": 5,
     "cron_jobs": [
-        CronJob(heartbeat_job, cron="* * * * * */10"),  # Every 10 seconds
+        CronJob(heartbeat_job, cron="* * * * *"),  # Every minute
+        CronJob(check_session_boundaries, cron="*/30 * * * * *"),  # Every 30 seconds
     ],
 }
