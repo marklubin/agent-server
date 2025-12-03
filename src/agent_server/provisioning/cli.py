@@ -97,6 +97,7 @@ async def provision_agent(
         embedding=definition.embedding,
         context_window_limit=definition.context_window,
         enable_reasoner=definition.enable_reasoner,
+        max_tokens=definition.max_tokens,
         max_reasoning_tokens=definition.max_reasoning_tokens,
         block_ids=block_ids,
         include_base_tools=True,
@@ -149,6 +150,7 @@ async def find_or_create_archive(
     archive = await client.archives.create(
         name=name,
         description=f"Shared archival memory for {name} entity",
+        embedding="openai/text-embedding-3-small",
     )
     logger.info("  Created new archive: %s (%s)", name, archive.id)
     return archive.id

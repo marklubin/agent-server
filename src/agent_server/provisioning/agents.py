@@ -24,6 +24,7 @@ class AgentDefinition:
     embedding: str = "openai/text-embedding-3-small"
     context_window: int = 25000  # 2x to undercut Letta's auto summarizer
     enable_reasoner: bool = True
+    max_tokens: int = 4096
     max_reasoning_tokens: int = 1024
 
     # Blocks shared with other agents (will use existing block IDs)
