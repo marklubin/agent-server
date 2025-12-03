@@ -1,14 +1,13 @@
 """Letta streaming provider implementation."""
 
-import json
 from collections.abc import AsyncIterator
 from logging import getLogger
 
 from letta_client import AsyncLetta, AsyncStream
-from letta_client.types.agents import LettaStreamingResponse, AssistantMessage
+from letta_client.types.agents import AssistantMessage, LettaStreamingResponse
 from rich.pretty import pretty_repr
-from agent_server.provider.base import LLMProvider
 
+from agent_server.provider.base import LLMProvider
 
 logger = getLogger()
 

@@ -7,20 +7,20 @@ import uuid
 import aiohttp
 import dotenv
 import uvicorn
+from deepgram import LiveOptions
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
-from deepgram import LiveOptions
+from pipecat.serializers.protobuf import ProtobufFrameSerializer
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.piper.tts import PiperTTSService
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
 )
-from pipecat.serializers.protobuf import ProtobufFrameSerializer
 from pipecat_whisker import WhiskerObserver
 
 from agent_server.model import InputChunk, ResponseChunk, ResponseDone, ResponseStart
@@ -38,8 +38,7 @@ def get_or_die(env_var: str) -> str:
     maybe_env_var = os.environ.get(env_var)
     if maybe_env_var is None:
         raise RuntimeError(f"Missing environment variable {env_var}")
-    else:
-        return maybe_env_var
+    return maybe_env_var
 
 
 # Config from environment

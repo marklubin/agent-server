@@ -1,6 +1,5 @@
 """Anthropic streaming provider implementation."""
 
-import json
 from collections.abc import AsyncIterator
 
 from anthropic import AsyncAnthropic

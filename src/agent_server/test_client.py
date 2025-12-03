@@ -12,18 +12,18 @@ async def main() -> None:
     uri = "ws://localhost:8000/ws"
 
     async with websockets.connect(uri) as ws:
-        print(f"Connected to {uri}")  # noqa: T201
-        print("Type messages and press Enter to send as InputChunk")  # noqa: T201
-        print("Ctrl+C to exit")  # noqa: T201
-        print("-" * 40)  # noqa: T201
+        print(f"Connected to {uri}")
+        print("Type messages and press Enter to send as InputChunk")
+        print("Ctrl+C to exit")
+        print("-" * 40)
 
         async def receive_messages() -> None:
             """Print all messages from server."""
             try:
                 async for message in ws:
-                    print(f"← {message}")  # noqa: T201
+                    print(f"← {message}")
             except websockets.ConnectionClosed:
-                print("Connection closed")  # noqa: T201
+                print("Connection closed")
 
         async def send_messages() -> None:
             """Read stdin and send as InputChunk."""
@@ -37,7 +37,7 @@ async def main() -> None:
                 if text:
                     chunk = f'{{"type": "input_chunk", "text": "{text}", "timestamp": {time.time()}}}'
                     await ws.send(chunk)
-                    print(f"→ {chunk}")  # noqa: T201
+                    print(f"→ {chunk}")
 
         # Run send and receive concurrently
         await asyncio.gather(
@@ -51,7 +51,7 @@ def run() -> None:
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nBye!")  # noqa: T201
+        print("\nBye!")
 
 
 if __name__ == "__main__":
