@@ -1,10 +1,22 @@
 services:
+  # =============================================================================
+  # Infrastructure (always running)
+  # =============================================================================
   redis:
     image: redis:7-alpine
     container_name: redis
     ports:
       - "6379:6379"
     restart: unless-stopped
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: redis-insight
+    ports:
+      - "5540:5540"
+    restart: unless-stopped
+    depends_on:
+      - redis
 
   letta:
     container_name: letta
@@ -15,6 +27,9 @@ services:
       - .letta/.persist/pgdata:/var/lib/postgresql/data
     env_file:
       - .env
+    environment:
+      - LETTA_DEBUG=False
+
   piper:
     build:
       context: https://github.com/OHF-Voice/piper1-gpl.git
@@ -25,7 +40,55 @@ services:
         python3 -m piper.download_voices --download-dir /data en_US-ljspeech-high &&
         python3 -m piper.http_server --host 0.0.0.0 --data-dir /data -m /data/en_US-ljspeech-high.onnx
     volumes:
-      - .piper:/data  # Voice model cache
+      - .piper:/data
     ports:
       - "5001:5000"
     restart: unless-stopped
+
+  # =============================================================================
+  # Kairix Application Services (profile: app)
+  # =============================================================================
+  kairix-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kairix-server
+    command: >
+      uv run uvicorn kairix_agent.server.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 2
+      --log-level info
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - LETTA_BASE_URL=http://letta:8283
+      - PIPER_URL=http://piper:5000
+    depends_on:
+      - redis
+      - letta
+      - piper
+    restart: unless-stopped
+    profiles:
+      - app
+
+  kairix-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kairix-worker
+    command: uv run saq kairix_agent.worker.settings --verbose
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - LETTA_BASE_URL=http://letta:8283
+    depends_on:
+      - redis
+      - letta
+    restart: unless-stopped
+    profiles:
+      - app

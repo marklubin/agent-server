@@ -13,7 +13,7 @@ from pipecat.frames.frames import (
 )
 from pipecat.processors.frame_processor import FrameDirection
 
-from agent_server.pipecat.user_turn_aggregator import (
+from kairix_agent.server.pipecat.user_turn_aggregator import (
     UserTurnAggregator,
     UserTurnMessageFrame,
     UserTurnState,

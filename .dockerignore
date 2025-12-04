@@ -1,0 +1,33 @@
+# Symlinks that point outside build context
+.claude
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local data
+.letta/
+.piper/
+.env
+
+# Git
+.git/
+.gitignore
+
+# Docs
+*.md
+design-docs/
+
+# Tests (not needed in prod image)
+tests/
