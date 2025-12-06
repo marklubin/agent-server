@@ -14,6 +14,8 @@ from letta_client.types.agents import (
     UserMessage,
 )
 
+from kairix_agent.events import EventType, publish_event
+
 if TYPE_CHECKING:
     from saq.types import Context
 
@@ -197,6 +199,17 @@ async def summarize_session(
     # 6. Reset message history (Letta preserves the system message automatically)
     await client.agents.messages.reset(agent_id=agent_id)
     logger.info("Reset message history for agent %s (system message preserved)", agent_id)
+
+    # 7. Publish event for connected clients
+    await publish_event(
+        agent_id=agent_id,
+        event_type=EventType.SUMMARY_COMPLETE,
+        payload={
+            "message_count": len(message_ids),
+            "summary": summary_text,
+        },
+    )
+    logger.info("Published SUMMARY_COMPLETE event for agent %s", agent_id)
 
     return {
         "status": "ok",

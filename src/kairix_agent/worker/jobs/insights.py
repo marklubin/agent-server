@@ -21,6 +21,7 @@ from letta_client.types.agents import (
 
 from kairix_agent.agent_config import get_agent_config
 from kairix_agent.config import Config
+from kairix_agent.events import EventType, publish_event
 
 if TYPE_CHECKING:
     from saq.types import Context
@@ -120,6 +121,15 @@ async def _check_agent_insights(
             gap,
             session_gap_minutes,
         )
+        # Publish event with triggered=False (no active conversation)
+        await publish_event(
+            agent_id=agent_id,
+            event_type=EventType.INSIGHTS_COMPLETE,
+            payload={
+                "triggered": False,
+                "response": None,
+            },
+        )
         return {
             "status": "skipped",
             "reason": "no_active_conversation",
@@ -173,6 +183,17 @@ Remember: only update if truly necessary. Irrelevant updates add noise."""
     # Reset insights agent to prevent context buildup
     await client.agents.messages.reset(agent_id=insights_agent_id)
     logger.debug("Reset insights agent %s message history", insights_agent_id)
+
+    # Publish event for connected clients
+    await publish_event(
+        agent_id=agent_id,
+        event_type=EventType.INSIGHTS_COMPLETE,
+        payload={
+            "triggered": True,
+            "response": response_text,
+        },
+    )
+    logger.info("Published INSIGHTS_COMPLETE event for agent %s", agent_id)
 
     return {
         "status": "ok",

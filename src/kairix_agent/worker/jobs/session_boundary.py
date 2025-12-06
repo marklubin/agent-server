@@ -10,6 +10,7 @@ from saq import Queue
 
 from kairix_agent.agent_config import get_agent_config
 from kairix_agent.config import Config
+from kairix_agent.events import EventType, publish_event
 from kairix_agent.memory import LettaMemoryService
 
 if TYPE_CHECKING:
@@ -95,6 +96,17 @@ async def _check_agent_session(
     # Extract message IDs for the session
     message_ids = [m.id for m in messages]
     first_message = messages[0]
+
+    # Publish session boundary event
+    await publish_event(
+        agent_id=agent_config.agent_id,
+        event_type=EventType.SESSION_BOUNDARY_DETECTED,
+        payload={
+            "gap_minutes": gap.total_seconds() / 60,
+            "message_count": len(messages),
+        },
+    )
+    logger.info("Published SESSION_BOUNDARY_DETECTED event for agent %s", agent_config.agent_id)
 
     # Enqueue summarization job with extended timeout (LLM calls can take a while)
     await queue.enqueue(

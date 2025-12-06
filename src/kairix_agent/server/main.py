@@ -1,15 +1,18 @@
 """Main entry point for the agent server."""
 
+import asyncio
 import logging
 import os
 import uuid
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 import aiohttp
 import dotenv
-from pipecat.audio.vad.silero import SileroVADAnalyzer
 import uvicorn
 from deepgram import LiveOptions
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 
 from pipecat.pipeline.pipeline import Pipeline
@@ -26,6 +29,7 @@ from pipecat.transports.websocket.fastapi import (
 from pipecat_whisker import WhiskerObserver
 
 from kairix_agent.logging_config import setup_logging
+from kairix_agent.server.events import connection_manager, start_event_listener
 from kairix_agent.server.model import InputChunk, ResponseChunk, ResponseDone, ResponseStart
 from kairix_agent.server.pipecat import LettaLLMService, UserTurnAggregator
 from kairix_agent.server.provider import AnthropicProvider, LettaProvider
@@ -34,7 +38,26 @@ dotenv.load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Application lifespan handler - starts background tasks."""
+    # Start the Postgres event listener
+    listener_task = asyncio.create_task(start_event_listener())
+    logger.info("Event listener task started")
+
+    yield
+
+    # Shutdown: cancel the listener task
+    listener_task.cancel()
+    try:
+        await listener_task
+    except asyncio.CancelledError:
+        pass
+    logger.info("Event listener task stopped")
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 def get_or_die(env_var: str) -> str:
@@ -89,6 +112,33 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.send_text(response_done.model_dump_json())
     except WebSocketDisconnect:
         logger.info("Disconnected from websocket")
+
+
+@app.websocket("/events/{agent_id}")
+async def events_endpoint(websocket: WebSocket, agent_id: str) -> None:
+    """WebSocket endpoint for streaming background events for a specific agent.
+
+    Events are pushed as JSON:
+    {
+        "id": "uuid",
+        "agent_id": "agent-123",
+        "event_type": "summary_complete",
+        "payload": {...},
+        "created_at": "2025-12-06T10:30:00Z"
+    }
+    """
+    await websocket.accept()
+    await connection_manager.register(agent_id, websocket)
+
+    try:
+        # Keep connection open, events are pushed via ConnectionManager
+        while True:
+            # Wait for client messages (ping/pong or close)
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await connection_manager.unregister(agent_id, websocket)
 
 
 @app.websocket("/voice")

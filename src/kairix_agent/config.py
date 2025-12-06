@@ -17,6 +17,11 @@ class Config(Enum):
     # Redis configuration
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
+    # Postgres configuration
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL", "postgresql+asyncpg://kairix:kairix@localhost:5432/kairix"
+    )
+
     # Session detection settings
     SESSION_GAP_MINUTES = int(os.getenv("SESSION_GAP_MINUTES", "5"))
 
