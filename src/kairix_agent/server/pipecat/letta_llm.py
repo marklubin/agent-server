@@ -72,7 +72,7 @@ class LettaLLMService(FrameProcessor):
         # Extract user message from frame
         user_message = self._extract_message(frame)
         if user_message is None:
-            logger.info("Letta LLM processor received unprocessable frame of type %s ", type(frame))
+            # Pass through frames we don't handle (audio, system frames, etc.)
             await self.push_frame(frame, direction)
             return
 

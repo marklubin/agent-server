@@ -7,18 +7,19 @@ Run with: saq kairix_agent.worker.settings
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from saq import CronJob, Queue
 
 from kairix_agent.config import Config
+from kairix_agent.logging_config import setup_logging
 from kairix_agent.worker.jobs import (
+    check_insights_relevance,
     check_session_boundaries,
     summarize_session,
 )
 
-if TYPE_CHECKING:
-    from saq.job import Job
+# Configure logging before anything else
+setup_logging("worker")
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +41,12 @@ MONITORED_AGENTS = [
 JOB_TIMEOUTS = {
     "summarize_session": 300,  # 5 minutes for summarization
     "check_session_boundaries": 60,  # 1 minute for session boundary check
+    "check_insights_relevance": 60,  # 1 minute max (less than cron interval)
 }
 
 settings = {
     "queue": queue,
-    "functions": [check_session_boundaries, summarize_session],
+    "functions": [check_insights_relevance, check_session_boundaries, summarize_session],
     "concurrency": 5,
     "cron_jobs": [
         CronJob(
@@ -52,6 +54,12 @@ settings = {
             cron="* * * * *",  # Every minute
             kwargs={"agents": MONITORED_AGENTS},
             timeout=JOB_TIMEOUTS["check_session_boundaries"],
+        ),
+        CronJob(
+            check_insights_relevance,
+            cron="* * * * *",  # Every minute
+            kwargs={"agents": MONITORED_AGENTS},
+            timeout=JOB_TIMEOUTS["check_insights_relevance"],
         ),
     ],
 }

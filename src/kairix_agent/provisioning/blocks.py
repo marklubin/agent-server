@@ -67,3 +67,10 @@ class AgentSpecificBlocks:
         description="Summary of the most recent conversation session, providing continuity context.",
         initial_value="No previous session recorded yet.",
     )
+
+    BACKGROUND_INSIGHTS = BlockDefinition(
+        label="background_insights",
+        description="Background context and insights retrieved to support the current conversation. This block is automatically updated by the BackgroundInsights agent when conversation topics shift. Use this information to provide more informed, contextually relevant responses. When the content seems stale or irrelevant to the current topic, the BackgroundInsights agent will refresh it.",
+        initial_value="No background insights loaded yet.",
+        limit=5000,
+    )

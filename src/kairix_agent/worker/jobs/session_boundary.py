@@ -10,10 +10,9 @@ from saq import Queue
 
 from kairix_agent.agent_config import get_agent_config
 from kairix_agent.config import Config
-from kairix_agent.memory import CursorStore, LettaMemoryService, SummarizationCursor
+from kairix_agent.memory import LettaMemoryService
 
 if TYPE_CHECKING:
-    from redis.asyncio import Redis
     from saq.types import Context
 
 logger = logging.getLogger(__name__)
@@ -21,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 async def _check_agent_session(
     queue: Queue,
-    cursor_store: CursorStore,
     agent_id: str,
     letta_url: str,
 ) -> dict[str, object]:
@@ -29,7 +27,6 @@ async def _check_agent_session(
 
     Args:
         queue: SAQ queue for enqueueing summarization jobs.
-        cursor_store: Redis cursor store.
         agent_id: The agent ID to check.
         letta_url: The Letta server URL.
 
@@ -52,18 +49,18 @@ async def _check_agent_session(
         base_url=letta_url,
     )
 
-    # Get current cursor
-    cursor = await cursor_store.get_cursor(agent_config.agent_id)
-    after_message_id = cursor.last_message_id if cursor else None
-
-    # Collect messages since cursor
+    # Fetch all messages (no cursor needed - messages are reset after summarization)
+    # Filter out system messages - only count user/assistant conversation
+    all_messages = [
+        message async for message in memory_service.get_messages_since(None)
+    ]
     messages = [
-        message
-        async for message in memory_service.get_messages_since(after_message_id)
+        m for m in all_messages
+        if m.message_type in ("user_message", "assistant_message")
     ]
 
     if not messages:
-        logger.debug("No new messages for agent %s", agent_config.agent_id)
+        logger.debug("No conversation messages for agent %s", agent_config.agent_id)
         return {"status": "ok", "messages_found": 0}
 
     # Check if last message is old enough (session gap exceeded)
@@ -112,14 +109,6 @@ async def _check_agent_session(
         timeout=300,  # 5 minutes for summarization
     )
 
-    # Update cursor to last message
-    new_cursor = SummarizationCursor(
-        agent_id=agent_config.agent_id,
-        last_summarized_at=now,
-        last_message_id=last_message.id,
-    )
-    await cursor_store.set_cursor(new_cursor)
-
     return {
         "status": "ok",
         "messages_found": len(messages),
@@ -146,19 +135,14 @@ async def check_session_boundaries(
         logger.warning("No agents configured, skipping session check")
         return {"status": "skipped", "reason": "no agents configured"}
 
-    # Get Redis from SAQ queue via worker
+    # Get queue from SAQ worker
     worker = ctx.get("worker")
-    logger.info("Worker: %s", worker)
-    if worker:
-        logger.info("Worker queue: %s", getattr(worker, "queue", None))
     queue_obj = getattr(worker, "queue", None) if worker else None
     if not isinstance(queue_obj, Queue):
         logger.error("No queue in context (worker=%s)", worker)
         return {"status": "error", "reason": "no queue in context"}
 
     queue: Queue = queue_obj
-    redis: Redis = queue.redis  # type: ignore[type-arg, assignment]
-    cursor_store = CursorStore(redis)
 
     results: dict[str, object] = {}
 
@@ -169,7 +153,6 @@ async def check_session_boundaries(
         try:
             result = await _check_agent_session(
                 queue=queue,
-                cursor_store=cursor_store,
                 agent_id=agent_id,
                 letta_url=letta_url,
             )

@@ -172,8 +172,7 @@ async def summarize_session(
     logger.info("Received summary (%d chars) from reflector", len(summary_text))
 
     # 3. Reset the reflector agent to prevent context buildup
-    # The reflector only needs current message + archival search, no persistent context
-    # TODO: re-activate the reset after debugging - await client.agents.messages.reset(agent_id=reflector_agent_id)
+    await client.agents.messages.reset(agent_id=reflector_agent_id)
     logger.info("Reset reflector agent %s message history", reflector_agent_id)
 
     # 4. Store summary in archival memory
@@ -195,33 +194,9 @@ async def summarize_session(
     except Exception:
         logger.exception("Failed to update last_session_summary block")
 
-    # 6. Soft reset: clear summarized messages but preserve system messages and any new ones
-    # IMPORTANT: Letta requires the first message to be a system message, so we must preserve those
-    # Read current message_ids, identify system messages to keep, remove only the ones we summarized
-    agent = await client.agents.retrieve(agent_id=agent_id)
-    current_message_ids = agent.message_ids or []
-    summarized_set = set(message_ids)
-
-    # Identify which messages are system messages (must be preserved)
-    system_message_ids: set[str] = set()
-    async for msg in client.agents.messages.list(agent_id):
-        if msg.id in current_message_ids and isinstance(msg, SystemMessage):
-            system_message_ids.add(msg.id)
-
-    # Keep: system messages + any new messages that arrived during summarization
-    remaining_ids = [
-        mid for mid in current_message_ids
-        if mid in system_message_ids or mid not in summarized_set
-    ]
-
-    await client.agents.update(agent_id=agent_id, message_ids=remaining_ids)
-    logger.info(
-        "Soft reset for agent %s: kept %d system messages, removed %d summarized messages, kept %d total messages",
-        agent_id,
-        len(system_message_ids),
-        len(message_ids),
-        len(remaining_ids),
-    )
+    # 6. Reset message history (Letta preserves the system message automatically)
+    await client.agents.messages.reset(agent_id=agent_id)
+    logger.info("Reset message history for agent %s (system message preserved)", agent_id)
 
     return {
         "status": "ok",

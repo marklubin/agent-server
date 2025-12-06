@@ -13,3 +13,7 @@ wheels/
 .claude
 .piper
 .idea
+
+# Logs
+logs/
+*.log

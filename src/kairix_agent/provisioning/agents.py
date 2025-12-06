@@ -89,8 +89,11 @@ def create_conversational_agent(name: str) -> AgentDefinition:
         name=name,
         description="Primary conversational agent for user interaction",
         system_prompt=_BASE_SYSTEM,
-        shared_blocks=SharedBlocks.ALL,
-        unique_blocks=[AgentSpecificBlocks.FOCUS, AgentSpecificBlocks.LAST_SESSION_SUMMARY],
+        shared_blocks=SharedBlocks.ALL,  # TODO move all blocks to explicit declaration
+        unique_blocks=[
+            AgentSpecificBlocks.FOCUS,
+            AgentSpecificBlocks.LAST_SESSION_SUMMARY,
+        ],
         tools=[
             "core_memory_append",
             "core_memory_replace",
@@ -105,6 +108,81 @@ def create_conversational_agent(name: str) -> AgentDefinition:
             "fetch_webpage",
             "web_search",
         ],
+    )
+
+
+_BACKGROUND_INSIGHTS_SYSTEM = """<base_instructions>
+You are the background insights aspect of this entity, responsible for monitoring conversations and ensuring relevant background context is available.
+
+Your role:
+- Review the current conversation state (recent messages you'll receive as a prompt)
+- Check your background_insights block for relevance to the current topic
+- Gather relevant context and update the background_insights block
+
+REQUIRED WORKFLOW - You MUST follow these steps:
+
+1. ANALYZE the conversation excerpt you receive
+   - Identify the main topic(s) being discussed
+   - Note any specific entities, locations, people, or concepts mentioned
+
+2. SEARCH for relevant context using archival_memory_search
+   - You MUST call archival_memory_search with relevant search terms from the conversation
+   - Search for key topics, names, places, or concepts mentioned
+   - This retrieves past memories and context about the user
+
+3. OPTIONALLY search the web using web_search
+   - If the conversation involves current events, external facts, or information beyond personal history
+   - Use web_search to gather relevant external context
+
+4. EVALUATE your current background_insights block
+   - Is it relevant to the current conversation topic?
+   - Does it contain stale information about a previous, unrelated topic?
+   - Is it empty or contains only placeholder text?
+
+5. UPDATE the block if needed using core_memory_replace
+   - If your background_insights block is outdated, irrelevant, or empty:
+     You MUST call core_memory_replace to update the background_insights block
+   - Include the relevant context you gathered from archival search and/or web search
+   - Write concise, actionable insights that will help the conversational agent
+
+IMPORTANT: You have three tools available:
+- archival_memory_search: Search past memories (ALWAYS use this)
+- web_search: Search the web for current/external info (use when helpful)
+- core_memory_replace: Update the background_insights block (use when block needs updating)
+
+If the current background_insights are already relevant an`d useful for the conversation, you may skip the update. But when in doubt, update the block with fresh context.
+</base_instructions>"""
+
+
+def create_background_insights_agent(name: str) -> AgentDefinition:
+    """Create a background insights agent definition.
+
+    The background insights agent monitors conversation context and updates the
+    background_insights block. This agent OWNS the background_insights block and
+    shares it with the conversational agent during provisioning.
+
+    Has access to archival search and web search to gather relevant context.
+
+    Args:
+        name: The base agent name. Will be suffixed with "-BackgroundInsights".
+
+    Returns:
+        AgentDefinition configured for context monitoring.
+    """
+    return AgentDefinition(
+        name=f"{name}-BackgroundInsights",
+        description="Background insights subprocess for monitoring conversation context and updating background insights",
+        system_prompt=_BACKGROUND_INSIGHTS_SYSTEM,
+        shared_blocks=SharedBlocks.ALL,
+        unique_blocks=[
+            AgentSpecificBlocks.BACKGROUND_INSIGHTS,  # This agent owns and manages this block
+        ],
+        tools=[
+            "archival_memory_search",
+            "web_search",
+            "core_memory_replace",  # To update background_insights
+        ],
+        include_base_tools=False,
     )
 
 

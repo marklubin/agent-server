@@ -6,16 +6,18 @@ import uuid
 
 import aiohttp
 import dotenv
+from pipecat.audio.vad.silero import SileroVADAnalyzer
 import uvicorn
 from deepgram import LiveOptions
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
+
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.serializers.protobuf import ProtobufFrameSerializer
 from pipecat.services.deepgram.stt import DeepgramSTTService
+from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.services.piper.tts import PiperTTSService
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
@@ -23,6 +25,7 @@ from pipecat.transports.websocket.fastapi import (
 )
 from pipecat_whisker import WhiskerObserver
 
+from kairix_agent.logging_config import setup_logging
 from kairix_agent.server.model import InputChunk, ResponseChunk, ResponseDone, ResponseStart
 from kairix_agent.server.pipecat import LettaLLMService, UserTurnAggregator
 from kairix_agent.server.provider import AnthropicProvider, LettaProvider
@@ -95,11 +98,13 @@ async def voice_endpoint(websocket: WebSocket) -> None:
 
     # Create transport for this WebSocket connection
     # ProtobufFrameSerializer defines the wire format for audio/text frames
-    # VAD config: be patient with pauses, don't cut off mid-sentence
+    # VAD config: quick to start, patient on pauses
     vad = SileroVADAnalyzer(
+        sample_rate=16000,
         params=VADParams(
+            start_secs=0.2,  # Quick to detect speech start (default 0.2)
             stop_secs=1.5,  # Wait 1.5s of silence before "done speaking" (default 0.8)
-        )
+        ),
     )
 
     transport = FastAPIWebsocketTransport(
@@ -123,19 +128,16 @@ async def voice_endpoint(websocket: WebSocket) -> None:
             interim_results=True,
             utterance_end_ms="2000",  # Wait 2s of silence before finalizing (default ~1s)
             vad_events=True,
+            profanity_filter=False,
         ),
     )
 
+    tts = DeepgramTTSService(api_key=deepgram_api_key, voice="aura-2-phoebe-en")
     user_turn_aggregator = UserTurnAggregator()
 
     llm = LettaLLMService(agent_id=agent_id, name="letta")
 
-    async with aiohttp.ClientSession() as session:
-        tts = PiperTTSService(
-            base_url="http://localhost:5001",
-            aiohttp_session=session,
-        )
-
+    async with aiohttp.ClientSession():
         # Build the pipeline
         pipeline = Pipeline(
             [
@@ -163,20 +165,28 @@ async def voice_endpoint(websocket: WebSocket) -> None:
 
 def main() -> None:
     """Run the agent server."""
-    logging.basicConfig(level=logging.INFO)
+    setup_logging("server")
     logger.info("Starting agent server...")
-    uvicorn.run(
-        "kairix_agent.server.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        reload_includes=["src/kairix_agent/server/**/*.py"],
-        reload_excludes=[
+
+    # Hot reload disabled by default, enable with RELOAD=1
+    reload_enabled = os.environ.get("RELOAD", "").lower() in ("1", "true", "yes")
+
+    uvicorn_kwargs: dict[str, object] = {
+        "host": "0.0.0.0",
+        "port": 8000,
+    }
+
+    if reload_enabled:
+        logger.info("Hot reload enabled")
+        uvicorn_kwargs["reload"] = True
+        uvicorn_kwargs["reload_includes"] = ["src/kairix_agent/server/**/*.py"]
+        uvicorn_kwargs["reload_excludes"] = [
             "src/kairix_agent/worker/*",
             "src/kairix_agent/provisioning/*",
             "src/kairix_agent/memory/*",
-        ],
-    )
+        ]
+
+    uvicorn.run("kairix_agent.server.main:app", **uvicorn_kwargs)
 
 
 if __name__ == "__main__":

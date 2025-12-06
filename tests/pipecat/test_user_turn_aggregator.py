@@ -1,15 +1,14 @@
 """Tests for UserTurnAggregator state machine."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
+import pytest
 from pipecat.frames.frames import (
-    Frame,
     InterimTranscriptionFrame,
+    TextFrame,
     TranscriptionFrame,
     UserStartedSpeakingFrame,
     UserStoppedSpeakingFrame,
-    TextFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection
 

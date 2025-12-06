@@ -15,11 +15,12 @@ import logging
 import sys
 from typing import TYPE_CHECKING
 
-from letta_client import AsyncLetta
+from letta_client import AsyncLetta, ConflictError
 
 from kairix_agent.config import Config
 from kairix_agent.provisioning.agents import (
     AgentDefinition,
+    create_background_insights_agent,
     create_conversational_agent,
     create_reflector_agent,
 )
@@ -139,8 +140,6 @@ async def _remediate_existing_agent(
 
     Checks for missing blocks and archives, attaches them if needed.
     """
-    from letta_client import ConflictError
-
     # Use no-retry client for attach operations (409 Conflict is expected, not retryable)
     no_retry_client = client.with_options(max_retries=0)
 
@@ -192,6 +191,34 @@ async def _remediate_existing_agent(
             logger.info("  Archive already attached (conflict ignored)")
     elif archive_id:
         logger.info("Archive already attached")
+
+    # Check for missing tools
+    if definition.tools:
+        existing_tool_names: set[str] = set()
+        async for tool in client.agents.tools.list(agent_id=agent_id):
+            if tool.name:
+                existing_tool_names.add(tool.name)
+
+        missing_tools = set(definition.tools) - existing_tool_names
+        if missing_tools:
+            logger.info("Agent missing tools: %s", missing_tools)
+            for tool_name in missing_tools:
+                # Find tool by name
+                tool_id: str | None = None
+                async for tool in client.tools.list():
+                    if tool.name == tool_name:
+                        tool_id = tool.id
+                        break
+                if tool_id:
+                    try:
+                        await no_retry_client.agents.tools.attach(agent_id=agent_id, tool_id=tool_id)
+                        logger.info("  Attached tool: %s", tool_name)
+                    except ConflictError:
+                        logger.info("  Tool %s already attached (conflict ignored)", tool_name)
+                else:
+                    logger.warning("  Tool not found: %s", tool_name)
+        else:
+            logger.info("All required tools present")
 
     logger.info("Agent remediation complete: %s", agent_id)
     return agent_id
@@ -251,6 +278,22 @@ async def _create_new_agent(
     )
 
     logger.info("Agent created: %s (%s)", definition.name, agent.id)
+
+    # Attach tools from definition
+    if definition.tools:
+        logger.info("Attaching %d tools...", len(definition.tools))
+        for tool_name in definition.tools:
+            # Find tool by name
+            tool_id: str | None = None
+            async for tool in client.tools.list():
+                if tool.name == tool_name:
+                    tool_id = tool.id
+                    break
+            if tool_id:
+                await client.agents.tools.attach(agent_id=agent.id, tool_id=tool_id)
+                logger.info("  Attached tool: %s", tool_name)
+            else:
+                logger.warning("  Tool not found: %s", tool_name)
 
     # Attach archive if provided
     if archive_id:
@@ -373,7 +416,7 @@ async def _run_provisioning(
 
     Args:
         client: Letta client.
-        agent_type: Type of agent ("conversational" or "reflector").
+        agent_type: Type of agent ("conversational", "reflector", or "insights").
         base_name: Base name for the agent.
 
     Returns:
@@ -394,6 +437,8 @@ async def _run_provisioning(
     # Create definition using factory methods
     if agent_type == "conversational":
         definition = create_conversational_agent(base_name)
+    elif agent_type == "insights":
+        definition = create_background_insights_agent(base_name)
     else:
         definition = create_reflector_agent(base_name)
 
@@ -406,13 +451,14 @@ async def _run_provisioning(
         logger.info("Setting up shared archive...")
         archive_id = await find_or_create_archive(client, base_name, existing_archives)
     else:
-        # For reflector agent: find and attach the conversational agent's archive and blocks
+        # For subsidiary agents: find and attach the conversational agent's archive and blocks
         logger.info("Looking for conversational agent's archive...")
         archive_id = await find_conversational_agent_archive(client, base_name)
         if not archive_id:
             logger.error(
-                "Cannot provision reflector: conversational agent '%s' not found "
+                "Cannot provision %s agent: conversational agent '%s' not found "
                 "or has no archive. Provision the conversational agent first.",
+                agent_type,
                 base_name,
             )
             return 1
@@ -425,7 +471,8 @@ async def _run_provisioning(
         )
         if not shared_block_ids:
             logger.error(
-                "Cannot provision reflector: conversational agent '%s' has no shared blocks.",
+                "Cannot provision %s agent: conversational agent '%s' has no shared blocks.",
+                agent_type,
                 base_name,
             )
             return 1
@@ -433,9 +480,64 @@ async def _run_provisioning(
     agent_id = await provision_agent(
         client, definition, existing_blocks, archive_id, shared_block_ids
     )
+
+    # For insights agent: attach its background_insights block to the conversational agent
+    if agent_type == "insights":
+        logger.info("Attaching background_insights block to conversational agent...")
+        await _attach_block_to_conversational_agent(
+            client, base_name, agent_id, "background_insights"
+        )
+
     logger.info("Done! Agent ID: %s", agent_id)
 
     return 0
+
+
+async def _attach_block_to_conversational_agent(
+    client: AsyncLetta,
+    base_name: str,
+    source_agent_id: str,
+    block_label: str,
+) -> None:
+    """Attach a block from a subsidiary agent to the conversational agent.
+
+    This enables the conversational agent to see blocks managed by other agents.
+
+    Args:
+        client: Letta client.
+        base_name: The base agent name (e.g., "Corindel").
+        source_agent_id: Agent ID that owns the block.
+        block_label: Label of the block to attach.
+    """
+    # Find the block on the source agent
+    block_id: str | None = None
+    async for block in client.agents.blocks.list(agent_id=source_agent_id):
+        if block.label == block_label:
+            block_id = block.id
+            break
+
+    if not block_id:
+        logger.warning("  Block '%s' not found on agent %s", block_label, source_agent_id)
+        return
+
+    # Find the conversational agent
+    conv_agent_id: str | None = None
+    async for agent in client.agents.list(name=base_name):
+        if agent.name == base_name:
+            conv_agent_id = agent.id
+            break
+
+    if not conv_agent_id:
+        logger.warning("  Conversational agent '%s' not found", base_name)
+        return
+
+    # Attach block to conversational agent
+    no_retry_client = client.with_options(max_retries=0)
+    try:
+        await no_retry_client.agents.blocks.attach(agent_id=conv_agent_id, block_id=block_id)
+        logger.info("  Attached block '%s' (%s) to conversational agent", block_label, block_id)
+    except ConflictError:
+        logger.info("  Block '%s' already attached to conversational agent", block_label)
 
 
 async def main() -> int:
@@ -443,7 +545,7 @@ async def main() -> int:
     parser = argparse.ArgumentParser(description="Provision Kairix agents")
     parser.add_argument(
         "--type",
-        choices=["conversational", "reflector"],
+        choices=["conversational", "reflector", "insights"],
         help="Type of agent to provision",
     )
     parser.add_argument(
