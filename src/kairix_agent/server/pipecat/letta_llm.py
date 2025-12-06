@@ -16,6 +16,7 @@ from pipecat.frames.frames import (
     TextFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+from pipecat.utils.text.markdown_text_filter import MarkdownTextFilter
 from rich.pretty import pretty_repr
 
 from kairix_agent.server.pipecat.user_turn_aggregator import UserTurnMessageFrame
@@ -54,6 +55,7 @@ class LettaLLMService(FrameProcessor):
         super().__init__(name=name)
         self._client = AsyncLetta(base_url=base_url)
         self._agent_id = agent_id
+        self._filter = MarkdownTextFilter()
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         """Process incoming frames and generate LLM responses.
@@ -98,7 +100,8 @@ class LettaLLMService(FrameProcessor):
                 if not isinstance(response.content, str):
                     logger.info("Unexpected content type for response: %s", type(response.content))
                 else:
-                    await self.push_frame(TextFrame(text=response.content))
+                    filtered_text = await self._filter.filter(response.content)
+                    await self.push_frame(TextFrame(text=filtered_text))
 
         # Signal response is complete
         await self.push_frame(LLMFullResponseEndFrame())

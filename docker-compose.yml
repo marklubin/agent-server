@@ -30,21 +30,6 @@ services:
     environment:
       - LETTA_DEBUG=False
 
-  piper:
-    build:
-      context: https://github.com/OHF-Voice/piper1-gpl.git
-    container_name: piper
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      - |
-        python3 -m piper.download_voices --download-dir /data en_US-ljspeech-high &&
-        python3 -m piper.http_server --host 0.0.0.0 --data-dir /data -m /data/en_US-ljspeech-high.onnx
-    volumes:
-      - .piper:/data
-    ports:
-      - "5001:5000"
-    restart: unless-stopped
-
   # =============================================================================
   # Kairix Application Services (profile: app)
   # =============================================================================
@@ -66,11 +51,9 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - LETTA_BASE_URL=http://letta:8283
-      - PIPER_URL=http://piper:5000
     depends_on:
       - redis
       - letta
-      - piper
     restart: unless-stopped
     profiles:
       - app
