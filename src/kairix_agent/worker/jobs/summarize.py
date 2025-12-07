@@ -6,15 +6,10 @@ import logging
 from typing import TYPE_CHECKING
 
 from letta_client import AsyncLetta
-from letta_client.types.agents import (
-    AssistantMessage,
-    ReasoningMessage,
-    SystemMessage,
-    ToolCallMessage,
-    UserMessage,
-)
+from letta_client.types.agents import AssistantMessage
 
 from kairix_agent.events import EventType, publish_event
+from kairix_agent.worker.jobs.transcript import format_transcript
 
 if TYPE_CHECKING:
     from saq.types import Context
@@ -41,31 +36,14 @@ async def _format_session_for_reflector(
     Returns:
         Formatted prompt string for the reflector.
     """
-    # Fetch the actual message content
-    messages: list[str] = []
-    message_id_set = set(message_ids)  # For O(1) lookup
-    async for msg in client.agents.messages.list(agent_id):
-        if msg.id not in message_id_set:
-            continue
+    # Fetch messages and filter to those in this session
+    message_id_set = set(message_ids)
+    messages = [
+        msg async for msg in client.agents.messages.list(agent_id)
+        if msg.id in message_id_set
+    ]
 
-        # Skip system messages (just setup/config)
-        if isinstance(msg, SystemMessage):
-            continue
-
-        # Extract text based on message type
-        if isinstance(msg, UserMessage):
-            content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            messages.append(f"[user]: {content}")
-        elif isinstance(msg, AssistantMessage):
-            content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            messages.append(f"[assistant]: {content}")
-        elif isinstance(msg, ReasoningMessage):
-            messages.append(f"[reasoning]: {msg.reasoning}")
-        elif isinstance(msg, ToolCallMessage):
-            tool_name = getattr(msg.tool_call, "name", "unknown_tool")
-            messages.append(f"[tool_call]: {tool_name}")
-
-    session_transcript = "\n".join(messages) if messages else "(no messages retrieved)"
+    session_transcript = format_transcript(messages)
 
     return f"""Please summarize the following conversation session.
 

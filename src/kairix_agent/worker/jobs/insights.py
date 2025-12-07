@@ -11,17 +11,12 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from letta_client import AsyncLetta
-from letta_client.types.agents import (
-    AssistantMessage,
-    ReasoningMessage,
-    SystemMessage,
-    ToolCallMessage,
-    UserMessage,
-)
+from letta_client.types.agents import AssistantMessage
 
 from kairix_agent.agent_config import get_agent_config
 from kairix_agent.config import Config
 from kairix_agent.events import EventType, publish_event
+from kairix_agent.worker.jobs.transcript import format_transcript
 
 if TYPE_CHECKING:
     from saq.types import Context
@@ -31,42 +26,10 @@ logger = logging.getLogger(__name__)
 RECENT_MESSAGE_COUNT = 10
 
 
-def _format_messages_for_insights(
-    messages: list[
-        UserMessage | AssistantMessage | ReasoningMessage | ToolCallMessage | SystemMessage
-    ],
-) -> str:
-    """Format messages into a prompt for the insights agent.
-
-    Args:
-        messages: Recent messages from conversational agent.
-
-    Returns:
-        Formatted conversation string.
-    """
-    formatted: list[str] = []
-    for msg in messages:
-        if isinstance(msg, SystemMessage):
-            continue
-        if isinstance(msg, UserMessage):
-            content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            formatted.append(f"[user]: {content}")
-        elif isinstance(msg, AssistantMessage):
-            content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            formatted.append(f"[assistant]: {content}")
-        elif isinstance(msg, ReasoningMessage):
-            formatted.append(f"[reasoning]: {msg.reasoning}")
-        else:
-            tool_name = getattr(msg.tool_call, "name", "unknown_tool")
-            formatted.append(f"[tool_call]: {tool_name}")
-
-    return "\n".join(formatted) if formatted else "(no messages)"
-
-
 async def _check_agent_insights(
-    client: AsyncLetta,
-    agent_id: str,
-    insights_agent_id: str,
+        client: AsyncLetta,
+        agent_id: str,
+        insights_agent_id: str,
 ) -> dict[str, object]:
     """Check and potentially update insights for a single agent.
 
@@ -137,7 +100,7 @@ async def _check_agent_insights(
         }
 
     # Active conversation - messages already in chronological order
-    conversation_text = _format_messages_for_insights(messages)
+    conversation_text = format_transcript(messages)
 
     prompt = f"""Review the current conversation and determine if your background_insights block needs updating.
 
@@ -203,9 +166,9 @@ Remember: only update if truly necessary. Irrelevant updates add noise."""
 
 
 async def check_insights_relevance(
-    _ctx: Context,
-    *,
-    agents: list[dict[str, Any]],
+        _ctx: Context,
+        *,
+        agents: list[dict[str, Any]],
 ) -> dict[str, object]:
     """Check if background insights need updating for monitored agents.
 
