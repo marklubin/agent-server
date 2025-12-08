@@ -16,7 +16,7 @@ class Base(DeclarativeBase):
 class EventType(str, Enum):
     """Types of background events emitted by worker jobs."""
 
-    SESSION_BOUNDARY_DETECTED = "session_boundary_detected"
+    SESSION_BOUNDARY = "session_boundary"
     SUMMARY_COMPLETE = "summary_complete"
     INSIGHTS_COMPLETE = "insights_complete"
 

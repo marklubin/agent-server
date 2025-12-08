@@ -4,8 +4,12 @@ from pydantic import BaseModel
 
 
 class SessionBoundaryPayload(BaseModel):
-    """Payload for SESSION_BOUNDARY_DETECTED events."""
+    """Payload for SESSION_BOUNDARY events.
 
+    Emitted every time the boundary check runs for an agent.
+    """
+
+    boundary_detected: bool
     gap_minutes: float
     message_count: int
 

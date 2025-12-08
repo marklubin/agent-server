@@ -62,6 +62,15 @@ async def _check_agent_session(
 
     if not messages:
         logger.debug("No conversation messages for agent %s", agent_config.agent_id)
+        await publish_event(
+            agent_id=agent_config.agent_id,
+            event_type=EventType.SESSION_BOUNDARY,
+            payload={
+                "boundary_detected": False,
+                "gap_minutes": 0,
+                "message_count": 0,
+            },
+        )
         return {"status": "ok", "messages_found": 0}
 
     # Check if last message is old enough (session gap exceeded)
@@ -77,6 +86,15 @@ async def _check_agent_session(
             agent_config.agent_id,
             gap,
             session_gap_minutes,
+        )
+        await publish_event(
+            agent_id=agent_config.agent_id,
+            event_type=EventType.SESSION_BOUNDARY,
+            payload={
+                "boundary_detected": False,
+                "gap_minutes": gap.total_seconds() / 60,
+                "message_count": len(messages),
+            },
         )
         return {
             "status": "ok",
@@ -100,13 +118,14 @@ async def _check_agent_session(
     # Publish session boundary event
     await publish_event(
         agent_id=agent_config.agent_id,
-        event_type=EventType.SESSION_BOUNDARY_DETECTED,
+        event_type=EventType.SESSION_BOUNDARY,
         payload={
+            "boundary_detected": True,
             "gap_minutes": gap.total_seconds() / 60,
             "message_count": len(messages),
         },
     )
-    logger.info("Published SESSION_BOUNDARY_DETECTED event for agent %s", agent_config.agent_id)
+    logger.info("Published SESSION_BOUNDARY event for agent %s", agent_config.agent_id)
 
     # Enqueue summarization job with extended timeout (LLM calls can take a while)
     await queue.enqueue(
