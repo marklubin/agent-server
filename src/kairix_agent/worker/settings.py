@@ -27,14 +27,19 @@ logger = logging.getLogger(__name__)
 queue = Queue.from_url(Config.REDIS_URL.value)
 logger.info("Created queue: %s (redis_url=%s)", queue, Config.REDIS_URL.value)
 
-# Explicit agent configuration - not loaded from env vars
-# This allows monitoring multiple agents simultaneously
-MONITORED_AGENTS = [
-    {
-        "agent_id": "agent-62f4b273-69c4-41d3-8571-02a0413756fb",  # Corindel
-        "letta_url": "http://localhost:9000",
-    },
+# Build MONITORED_AGENTS from env vars
+# MONITORED_AGENT_IDS: comma-separated list of agent IDs
+# LETTA_BASE_URL: shared Letta server URL for all agents
+_agent_ids = [
+    aid.strip()
+    for aid in Config.MONITORED_AGENT_IDS.value.split(",")
+    if aid.strip()
 ]
+MONITORED_AGENTS = [
+    {"agent_id": aid, "letta_url": Config.LETTA_BASE_URL.value}
+    for aid in _agent_ids
+]
+logger.info("Monitoring %d agents: %s", len(MONITORED_AGENTS), _agent_ids)
 
 # Job-specific timeout settings (in seconds)
 # summarize_session can take a while due to LLM calls

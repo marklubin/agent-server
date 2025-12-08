@@ -13,6 +13,7 @@ from logging import getLogger
 from letta_client import AsyncLetta
 from letta_client.types.agents import Message
 
+from kairix_agent.config import Config
 from kairix_agent.memory.models import ConversationSummary
 
 logger = getLogger(__name__)
@@ -25,15 +26,17 @@ class LettaMemoryService:
         self,
         agent_id: str,
         archive_id: str,
-        base_url: str = "http://localhost:9000",
+        base_url: str | None = None,
     ) -> None:
         """Initialize the memory service.
 
         Args:
             agent_id: The Letta agent ID for message queries.
             archive_id: The Letta archive ID for storing passages.
-            base_url: The Letta server URL.
+            base_url: The Letta server URL (defaults to LETTA_BASE_URL env var).
         """
+        if base_url is None:
+            base_url = Config.LETTA_BASE_URL.value
         self.client = AsyncLetta(base_url=base_url)
         self.agent_id = agent_id
         self.archive_id = archive_id

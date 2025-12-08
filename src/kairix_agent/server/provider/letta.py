@@ -7,6 +7,7 @@ from letta_client import AsyncLetta, AsyncStream
 from letta_client.types.agents import AssistantMessage, LettaStreamingResponse
 from rich.pretty import pretty_repr
 
+from kairix_agent.config import Config
 from kairix_agent.server.provider.base import LLMProvider
 
 logger = getLogger()
@@ -15,7 +16,9 @@ logger = getLogger()
 class LettaProvider(LLMProvider):
     """Letta agent streaming provider."""
 
-    def __init__(self, agent_id: str, base_url: str = "http://localhost:9000") -> None:
+    def __init__(self, agent_id: str, base_url: str | None = None) -> None:
+        if base_url is None:
+            base_url = Config.LETTA_BASE_URL.value
         self.client = AsyncLetta(base_url=base_url)
         self.agent_id = agent_id
 

@@ -11,6 +11,7 @@ from typing import Any
 from letta_client import AsyncLetta
 
 from kairix_agent.agent_config import get_agent_config
+from kairix_agent.config import Config
 from kairix_agent.worker.jobs.insights import _check_agent_insights
 from kairix_agent.worker.jobs.summarize import summarize_session
 
@@ -19,8 +20,6 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-DEFAULT_LETTA_URL = "http://localhost:9000"
 
 
 async def _run_insights(agent_id: str, letta_url: str) -> dict[str, Any]:
@@ -83,7 +82,7 @@ def run_insights() -> None:
     """CLI entry point for test-insights."""
     parser = argparse.ArgumentParser(description="Run insights job for an agent")
     parser.add_argument("--agent-id", required=True, help="Conversational agent ID")
-    parser.add_argument("--letta-url", default=DEFAULT_LETTA_URL, help="Letta server URL")
+    parser.add_argument("--letta-url", default=Config.LETTA_BASE_URL.value, help="Letta server URL")
     args = parser.parse_args()
 
     result = asyncio.run(_run_insights(args.agent_id, args.letta_url))
@@ -94,7 +93,7 @@ def run_summarize() -> None:
     """CLI entry point for test-summarize."""
     parser = argparse.ArgumentParser(description="Run summarization for an agent")
     parser.add_argument("--agent-id", required=True, help="Conversational agent ID")
-    parser.add_argument("--letta-url", default=DEFAULT_LETTA_URL, help="Letta server URL")
+    parser.add_argument("--letta-url", default=Config.LETTA_BASE_URL.value, help="Letta server URL")
     parser.add_argument("--message-ids", required=True, help="Comma-separated message IDs")
     parser.add_argument("--period-start", required=True, help="ISO timestamp of period start")
     parser.add_argument("--period-end", required=True, help="ISO timestamp of period end")

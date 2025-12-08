@@ -19,6 +19,7 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.utils.text.markdown_text_filter import MarkdownTextFilter
 from rich.pretty import pretty_repr
 
+from kairix_agent.config import Config
 from kairix_agent.server.pipecat.user_turn_aggregator import UserTurnMessageFrame
 
 logger = getLogger(__name__)
@@ -42,17 +43,19 @@ class LettaLLMService(FrameProcessor):
         self,
         *,
         agent_id: str,
-        base_url: str = "http://localhost:9000",
+        base_url: str | None = None,
         name: str | None = None,
     ) -> None:
         """Initialize the Letta LLM service.
 
         Args:
             agent_id: The Letta agent ID to use for conversations.
-            base_url: The Letta server URL.
+            base_url: The Letta server URL (defaults to LETTA_BASE_URL env var).
             name: Optional name for this processor (for logging/debugging).
         """
         super().__init__(name=name)
+        if base_url is None:
+            base_url = Config.LETTA_BASE_URL.value
         self._client = AsyncLetta(base_url=base_url)
         self._agent_id = agent_id
         self._filter = MarkdownTextFilter()
