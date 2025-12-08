@@ -118,5 +118,3 @@ services:
     networks:
       - kairix-net
 
-networks:
-  kairix-net:
