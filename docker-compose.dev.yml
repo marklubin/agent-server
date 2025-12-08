@@ -78,4 +78,3 @@ services:
 
 networks:
   kairix-net:
-    external: true
