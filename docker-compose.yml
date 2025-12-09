@@ -112,7 +112,7 @@ services:
     extra_hosts:
       - "host.containers.internal:host-gateway"
     volumes:
-      - /home/mark/mcp-email-server:/opt/mcp-email-server:ro
+      - /home/mark/mcp-email-server:/opt/mcp-email-server
       - /home/mark/cert.pem:/opt/certs/cert.pem:ro
     depends_on:
       postgres:
