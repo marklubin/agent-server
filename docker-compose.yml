@@ -113,7 +113,7 @@ services:
       - "host.containers.internal:host-gateway"
     volumes:
       - /home/mark/mcp-email-server:/opt/mcp-email-server:ro
-      - /home/mark/.config/protonmail/bridge-v3/cert.pem:/opt/certs/cert.pem:ro
+      - /home/mark/cert.pem:/opt/certs/cert.pem:ro
     depends_on:
       postgres:
         condition: service_healthy
