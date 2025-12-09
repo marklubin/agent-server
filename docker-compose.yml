@@ -105,18 +105,10 @@ services:
   metamcp:
     image: ghcr.io/metatool-ai/metamcp:latest
     container_name: metamcp
-    ports:
-      - "12008:12008"
+    network_mode: host
     env_file:
       - metamcp.env
-    extra_hosts:
-      - "host.containers.internal:host-gateway"
     volumes:
       - /home/mark/mcp-email-server:/opt/mcp-email-server
       - /home/mark/cert.pem:/opt/certs/cert.pem:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: unless-stopped
-    networks:
-      - kairix-net
