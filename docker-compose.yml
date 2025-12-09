@@ -105,10 +105,38 @@ services:
   metamcp:
     image: ghcr.io/metatool-ai/metamcp:latest
     container_name: metamcp
-    network_mode: host
+    ports:
+      - "12008:12008"
     env_file:
       - metamcp.env
     volumes:
       - /home/mark/mcp-email-server:/opt/mcp-email-server
       - /home/mark/cert.pem:/opt/certs/cert.pem:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - kairix-net
+
+  # Proxy localhost IMAP into kairix-net for containers
+  pmb-imap-proxy:
+    image: alpine/socat
+    container_name: pmb-imap-proxy
+    command: TCP-LISTEN:1143,fork,reuseaddr TCP:host.containers.internal:1143
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    restart: unless-stopped
+    networks:
+      - kairix-net
+
+  # Proxy localhost SMTP into kairix-net for containers
+  pmb-smtp-proxy:
+    image: alpine/socat
+    container_name: pmb-smtp-proxy
+    command: TCP-LISTEN:1025,fork,reuseaddr TCP:host.containers.internal:1025
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    restart: unless-stopped
+    networks:
+      - kairix-net
