@@ -109,6 +109,8 @@ services:
       - "12008:12008"
     env_file:
       - metamcp.env
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
