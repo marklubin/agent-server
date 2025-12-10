@@ -23,6 +23,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Job name constant for enqueuing
+TRIGGER_INSIGHTS_JOB = "trigger_insights"
+
 RECENT_MESSAGE_COUNT = 10
 
 
@@ -217,3 +220,124 @@ async def check_insights_relevance(
             results[agent_id] = {"status": "error", "reason": "exception"}
 
     return {"status": "ok", "agents": results}
+
+
+async def trigger_insights(
+    _ctx: Context,
+    *,
+    agent_id: str,
+    letta_url: str,
+) -> dict[str, object]:
+    """Trigger insights check for a single agent (on-demand).
+
+    This job is enqueued after each LLM response to immediately check
+    if insights need updating based on the conversation.
+
+    Unlike check_insights_relevance (cron), this skips the session gap check
+    since we know there's an active conversation.
+
+    Args:
+        _ctx: SAQ job context.
+        agent_id: The conversational agent ID.
+        letta_url: The Letta server URL.
+
+    Returns:
+        Status dict with results.
+    """
+    try:
+        config = await get_agent_config(agent_id=agent_id, letta_url=letta_url)
+
+        if not config.insights_agent_id:
+            logger.debug("No insights agent configured for %s, skipping", agent_id)
+            return {"status": "skipped", "reason": "no_insights_agent"}
+
+        client = AsyncLetta(base_url=letta_url)
+
+        # Use the internal helper but we'll inline a simplified version
+        # that skips the session gap check (we know conversation is active)
+        all_messages: list[Any] = [
+            msg
+            async for msg in client.agents.messages.list(
+                agent_id=agent_id,
+                order="asc",
+                order_by="created_at",
+            )
+        ]
+
+        if len(all_messages) > 1000:
+            msg = f"Agent {agent_id} has {len(all_messages)} messages - need pagination"
+            raise RuntimeError(msg)
+
+        messages = all_messages[-RECENT_MESSAGE_COUNT:] if all_messages else []
+
+        if not messages:
+            logger.info("No messages for agent %s, skipping triggered insights", agent_id)
+            return {"status": "skipped", "reason": "no_messages"}
+
+        # Format and send to insights agent (skip session gap check)
+        conversation_text = format_transcript(messages)
+
+        prompt = f"""Review the current conversation and determine if your background_insights block needs updating.
+
+<recent_conversation>
+{conversation_text}
+</recent_conversation>
+
+Your background_insights block is visible in your memory. Evaluate whether it supports this conversation:
+1. If relevant: respond briefly acknowledging no update needed
+2. If stale/irrelevant:
+   - Search archival memory for relevant context
+   - Optionally search the web for current information
+   - Update the background_insights block using core_memory_replace
+
+Remember: only update if truly necessary. Irrelevant updates add noise."""
+
+        logger.info(
+            "Triggered insights: sending %d messages to insights agent %s",
+            len(messages),
+            config.insights_agent_id,
+        )
+
+        response = await client.agents.messages.create(
+            agent_id=config.insights_agent_id,
+            input=prompt,
+        )
+
+        response_text = ""
+        for msg in response.messages:
+            if isinstance(msg, AssistantMessage) and msg.content:
+                if isinstance(msg.content, str):
+                    response_text += msg.content
+                else:
+                    for item in msg.content:
+                        if hasattr(item, "text"):
+                            response_text += item.text
+
+        logger.info(
+            "Triggered insights response (%d chars): %s...",
+            len(response_text),
+            response_text[:100] if response_text else "(empty)",
+        )
+
+        # Reset insights agent
+        await client.agents.messages.reset(agent_id=config.insights_agent_id)
+
+        # Publish event
+        await publish_event(
+            agent_id=agent_id,
+            event_type=EventType.INSIGHTS_COMPLETE,
+            payload={
+                "triggered": True,
+                "response": response_text,
+            },
+        )
+
+        return {
+            "status": "ok",
+            "messages_checked": len(messages),
+            "response_length": len(response_text),
+        }
+
+    except Exception:
+        logger.exception("Error in triggered insights for agent %s", agent_id)
+        return {"status": "error", "reason": "exception"}

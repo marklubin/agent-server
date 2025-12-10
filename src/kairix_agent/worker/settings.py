@@ -1,3 +1,4 @@
+
 """SAQ worker settings module.
 
 This module exposes the settings dict for SAQ to consume.
@@ -16,6 +17,7 @@ from kairix_agent.worker.jobs import (
     check_insights_relevance,
     check_session_boundaries,
     summarize_session,
+    trigger_insights,
 )
 
 # Configure logging before anything else
@@ -47,11 +49,12 @@ JOB_TIMEOUTS = {
     "summarize_session": 300,  # 5 minutes for summarization
     "check_session_boundaries": 60,  # 1 minute for session boundary check
     "check_insights_relevance": 60,  # 1 minute max (less than cron interval)
+    "trigger_insights": 60,  # 1 minute for on-demand insights
 }
 
 settings = {
     "queue": queue,
-    "functions": [check_insights_relevance, check_session_boundaries, summarize_session],
+    "functions": [check_insights_relevance, check_session_boundaries, summarize_session, trigger_insights],
     "concurrency": 5,
     "cron_jobs": [
         CronJob(

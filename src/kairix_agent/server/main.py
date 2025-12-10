@@ -27,7 +27,9 @@ from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketTransport,
 )
 from pipecat_whisker import WhiskerObserver
+from saq import Queue
 
+from kairix_agent.config import Config
 from kairix_agent.logging_config import setup_logging
 from kairix_agent.server.events import connection_manager, start_event_listener
 from kairix_agent.server.model import InputChunk, ResponseChunk, ResponseDone, ResponseStart
@@ -185,7 +187,10 @@ async def voice_endpoint(websocket: WebSocket) -> None:
     tts = DeepgramTTSService(api_key=deepgram_api_key, voice="aura-2-phoebe-en")
     user_turn_aggregator = UserTurnAggregator()
 
-    llm = LettaLLMService(agent_id=agent_id, name="letta")
+    # Create SAQ queue for background jobs
+    job_queue = Queue.from_url(Config.REDIS_URL.value)
+
+    llm = LettaLLMService(agent_id=agent_id, name="letta", queue=job_queue)
 
     async with aiohttp.ClientSession():
         # Build the pipeline
