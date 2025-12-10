@@ -14,8 +14,12 @@ from kairix_agent.provisioning.blocks import (
 
 
 @dataclass
-class AgentDefinition:
-    """Definition of an agent to be provisioned."""
+class AgentSpec:
+    """Specification for an agent to be provisioned.
+
+    Note: This is a dataclass for in-memory agent specs, distinct from
+    the AgentDefinition SQLAlchemy model which stores DB-driven config.
+    """
 
     name: str
     description: str
@@ -76,19 +80,20 @@ Your summaries become part of the entity's long-term memory and help maintain co
 </base_instructions>"""
 
 
-def create_conversational_agent(name: str) -> AgentDefinition:
-    """Create a conversational agent definition.
+def create_conversational_agent(name: str, system_prompt: str) -> AgentSpec:
+    """Create a conversational agent specification.
 
     Args:
         name: The agent's name (e.g., "Corindel").
+        system_prompt: The system prompt loaded from database.
 
     Returns:
-        AgentDefinition configured for conversational use.
+        AgentSpec configured for conversational use.
     """
-    return AgentDefinition(
+    return AgentSpec(
         name=name,
         description="Primary conversational agent for user interaction",
-        system_prompt=_BASE_SYSTEM,
+        system_prompt=system_prompt,
         shared_blocks=SharedBlocks.ALL,  # TODO move all blocks to explicit declaration
         unique_blocks=[
             AgentSpecificBlocks.FOCUS,
@@ -154,8 +159,8 @@ If the current background_insights are already relevant an`d useful for the conv
 </base_instructions>"""
 
 
-def create_background_insights_agent(name: str) -> AgentDefinition:
-    """Create a background insights agent definition.
+def create_background_insights_agent(name: str, system_prompt: str) -> AgentSpec:
+    """Create a background insights agent specification.
 
     The background insights agent monitors conversation context and updates the
     background_insights block. This agent OWNS the background_insights block and
@@ -165,14 +170,15 @@ def create_background_insights_agent(name: str) -> AgentDefinition:
 
     Args:
         name: The base agent name. Will be suffixed with "-BackgroundInsights".
+        system_prompt: The system prompt loaded from database.
 
     Returns:
-        AgentDefinition configured for context monitoring.
+        AgentSpec configured for context monitoring.
     """
-    return AgentDefinition(
+    return AgentSpec(
         name=f"{name}-BackgroundInsights",
         description="Background insights subprocess for monitoring conversation context and updating background insights",
-        system_prompt=_BACKGROUND_INSIGHTS_SYSTEM,
+        system_prompt=system_prompt,
         shared_blocks=SharedBlocks.ALL,
         unique_blocks=[
             AgentSpecificBlocks.BACKGROUND_INSIGHTS,  # This agent owns and manages this block
@@ -186,8 +192,8 @@ def create_background_insights_agent(name: str) -> AgentDefinition:
     )
 
 
-def create_reflector_agent(name: str) -> AgentDefinition:
-    """Create a reflector agent definition.
+def create_reflector_agent(name: str, system_prompt: str) -> AgentSpec:
+    """Create a reflector agent specification.
 
     The reflector shares identity blocks with the conversational agent but has a
     specialized system prompt for reflection and summarization tasks.
@@ -195,14 +201,15 @@ def create_reflector_agent(name: str) -> AgentDefinition:
 
     Args:
         name: The base agent name. Will be suffixed with "-Reflector".
+        system_prompt: The system prompt loaded from database.
 
     Returns:
-        AgentDefinition configured for reflection/summarization.
+        AgentSpec configured for reflection/summarization.
     """
-    return AgentDefinition(
+    return AgentSpec(
         name=f"{name}-Reflector",
         description="Reflector subprocess for session summarization and memory consolidation",
-        system_prompt=_REFLECTOR_SYSTEM,
+        system_prompt=system_prompt,
         shared_blocks=SharedBlocks.ALL,
         unique_blocks=[],  # No agent-specific blocks needed
         tools=[
