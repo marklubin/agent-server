@@ -3,7 +3,7 @@
 # =============================================================================
 # Usage:
 #   Build:   docker compose -f docker-compose.yml -f docker-compose.prod.yml build
-#   Migrate: docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile migrate run --rm migrate
+#   Migrate: COMPOSE_PROFILES=migrate docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm migrate
 #   Start:   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # Features:
